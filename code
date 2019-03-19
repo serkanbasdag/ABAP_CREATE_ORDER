@@ -1,0 +1,321 @@
+TABLES: ZSB_T_MSIPARIS.
+
+DATA: BEGIN OF GT_EXCEL OCCURS 0,
+        MALZEME_NO      LIKE ZSB_T_MSIPARIS-MALZEME_NO,
+        PARTI_NO        LIKE ZSB_T_MSIPARIS-PARTI_NO,
+        MALZEME_SKT     LIKE ZSB_T_MSIPARIS-MALZEME_SKT,
+        MALZEME_MIKTARI LIKE ZSB_T_MSIPARIS-MALZEME_MIKTARI,
+      END OF GT_EXCEL.
+
+
+DATA:BEGIN OF GT_LIST OCCURS 0,
+       MALZEME_NO      LIKE GT_EXCEL-MALZEME_NO,
+       PARTI_NO        LIKE GT_EXCEL-PARTI_NO,
+       MALZEME_SKT     LIKE GT_EXCEL-MALZEME_SKT,
+       MALZEME_MIKTARI LIKE GT_EXCEL-MALZEME_MIKTARI,
+     END OF GT_LIST.
+
+DATA: BEGIN OF GT_SIPARIS OCCURS 0,
+        MALZEME_NO      LIKE ZSB_T_MSIPARIS-MALZEME_NO,
+        PARTI_NO        LIKE ZSB_T_MSIPARIS-PARTI_NO,
+        MALZEME_SKT     LIKE ZSB_T_MSIPARIS-MALZEME_SKT,
+        MALZEME_MIKTARI LIKE ZSB_T_MSIPARIS-MALZEME_MIKTARI,
+      END OF GT_SIPARIS.
+
+DATA: GS_LIST    LIKE LINE OF GT_LIST,
+      GS_SIPARIS LIKE LINE OF GT_SIPARIS.
+
+DATA: GT_FCAT          TYPE SLIS_T_FIELDCAT_ALV,
+      GS_FCAT          LIKE LINE OF GT_FCAT,
+      GS_LAYO          TYPE SLIS_LAYOUT_ALV,
+      I_STRUCTURE_NAME LIKE  DD02L-TABNAME.
+
+SELECTION-SCREEN: BEGIN OF BLOCK B1 WITH FRAME TITLE TEXT-001.
+PARAMETERS: P_PATH LIKE RLGRAP-FILENAME OBLIGATORY DEFAULT 'C:\Users\Acer V17 Nitro\Desktop\Siparis.xlsx'.
+SELECTION-SCREEN: END OF BLOCK B1.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR P_PATH.
+  PERFORM GET_FILE_PATH.
+
+START-OF-SELECTION.
+
+  PERFORM UPLOAD_EXCEL.
+  PERFORM SET_DATA.
+
+END-OF-SELECTION.
+  PERFORM FIELDCAT.
+  PERFORM LAYOUT.
+  PERFORM DISPLAY.
+*&---------------------------------------------------------------------*
+*&      Form  GET_FILE_PATH
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM GET_FILE_PATH .
+  DATA : LV_SUBRC LIKE SY-SUBRC,
+         LT_PATH  TYPE FILETABLE.
+
+  CALL METHOD CL_GUI_FRONTEND_SERVICES=>FILE_OPEN_DIALOG
+    EXPORTING
+      WINDOW_TITLE     = 'Select Source Excel File'
+      DEFAULT_FILENAME = '*.xls'
+      MULTISELECTION   = ' '
+    CHANGING
+      FILE_TABLE       = LT_PATH
+      RC               = LV_SUBRC.
+
+  LOOP AT LT_PATH INTO P_PATH.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  UPLOAD_EXCEL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM UPLOAD_EXCEL .
+  DATA: LT_RAW TYPE TRUXS_T_TEXT_DATA.
+
+  CLEAR:GT_EXCEL,GT_EXCEL[].
+
+  CALL FUNCTION 'TEXT_CONVERT_XLS_TO_SAP'
+    EXPORTING
+      I_TAB_RAW_DATA       = LT_RAW
+      I_FILENAME           = P_PATH
+      I_LINE_HEADER        = 'X'
+    TABLES
+      I_TAB_CONVERTED_DATA = GT_EXCEL
+    EXCEPTIONS
+      CONVERSION_FAILED    = 1
+      OTHERS               = 2.
+  IF SY-SUBRC <> 0.
+    MESSAGE 'Excel yüklenemedi! Dosya açık olabilir!'
+       TYPE 'S' DISPLAY LIKE 'E'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM SET_DATA .
+  CLEAR:GT_LIST,GT_LIST[].
+
+  LOOP AT GT_EXCEL.
+    GT_LIST-MALZEME_NO      = GT_EXCEL-MALZEME_NO.
+    GT_LIST-PARTI_NO        = GT_EXCEL-PARTI_NO.
+    GT_LIST-MALZEME_SKT     = GT_EXCEL-MALZEME_SKT.
+    GT_LIST-MALZEME_MIKTARI = GT_EXCEL-MALZEME_MIKTARI.
+
+    APPEND GT_LIST.
+    CLEAR GT_LIST.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FIELDCAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM FIELDCAT .
+  CALL FUNCTION 'REUSE_ALV_FIELDCATALOG_MERGE'
+    EXPORTING
+      I_PROGRAM_NAME         = SY-REPID
+*     I_INTERNAL_TABNAME     = 'GT_LIST'
+      I_CLIENT_NEVER_DISPLAY = 'X'
+      I_INCLNAME             = SY-REPID
+      I_BYPASSING_BUFFER     = 'X'
+      I_STRUCTURE_NAME       = 'ZSB_T_MSIPARIS'
+    CHANGING
+      CT_FIELDCAT            = GT_FCAT
+    EXCEPTIONS
+      INCONSISTENT_INTERFACE = 1
+      PROGRAM_ERROR          = 2
+      OTHERS                 = 3.
+  IF SY-SUBRC <> 0.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  LAYOUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM LAYOUT .
+  GS_LAYO-COLWIDTH_OPTIMIZE = 'X'.
+  GS_LAYO-ZEBRA = 'X'.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM DISPLAY .
+
+  SORT GT_LIST BY MALZEME_SKT.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      I_BYPASSING_BUFFER       = 'X'
+      I_CALLBACK_PROGRAM       = SY-REPID
+      IS_LAYOUT                = GS_LAYO
+      IT_FIELDCAT              = GT_FCAT
+      I_CALLBACK_USER_COMMAND  = 'USER_COMMAND'
+      I_CALLBACK_PF_STATUS_SET = 'PFSTATUS'
+      I_SAVE                   = 'A'
+    TABLES
+      T_OUTTAB                 = GT_LIST
+    EXCEPTIONS
+      PROGRAM_ERROR            = 1
+      OTHERS                   = 2.
+  IF SY-SUBRC <> 0.
+  ENDIF.
+ENDFORM.
+
+FORM USER_COMMAND USING R_UCOMM TYPE SY-UCOMM RS_SELFIELD TYPE
+SLIS_SELFIELD.
+
+  CASE R_UCOMM.
+    WHEN 'SIPARIS'.
+      PERFORM SIPARIS.
+
+  ENDCASE.
+
+ENDFORM.
+
+FORM PFSTATUS USING UT_EXTAB TYPE SLIS_T_EXTAB.
+
+  SET PF-STATUS 'STANDARD_FULLSCREEN' .
+
+ENDFORM. " PF_STATUS_SET
+*&---------------------------------------------------------------------*
+*&      Form  SIPARIS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM SIPARIS .
+
+  DATA: LT_FIELDS TYPE TABLE OF SVAL,
+        LS_FIELDS TYPE SVAL.
+
+  DATA: I_MIKTAR TYPE INT2,
+        I_MIKTAR2 TYPE INT2,
+        O_MIKTAR TYPE INT2,
+        KALAN    TYPE INT2,
+        TOPLAM TYPE INT2,
+        MSG TYPE String,
+        result TYPE String.
+
+
+  LS_FIELDS-TABNAME = 'ZSB_T_MSIPARIS'.
+  LS_FIELDS-FIELDNAME = 'MALZEME_MIKTARI'.
+  APPEND LS_FIELDS TO LT_FIELDS.
+
+  CALL FUNCTION 'POPUP_GET_VALUES'
+    EXPORTING
+*     NO_VALUE_CHECK        = ' '
+      POPUP_TITLE = 'Siparis Miktarı'
+*     START_COLUMN          = '5'
+*     START_ROW   = '5'
+*   IMPORTING
+*     RETURNCODE  =
+    TABLES
+      FIELDS      = LT_FIELDS
+*   EXCEPTIONS
+*     ERROR_IN_FIELDS       = 1
+*     OTHERS      = 2
+    .
+  LOOP AT LT_FIELDS INTO LS_FIELDS.
+    I_MIKTAR = LS_FIELDS-VALUE.
+    I_MIKTAR2 = LS_FIELDS-VALUE.
+  ENDLOOP.
+
+
+  LOOP AT GT_LIST INTO GS_LIST.
+
+    O_MIKTAR = GS_LIST-MALZEME_MIKTARI.
+    KALAN = O_MIKTAR - I_MIKTAR.
+    TOPLAM = TOPLAM + O_MIKTAR.
+
+    IF KALAN < 0 OR KALAN = 0.
+      GS_SIPARIS-MALZEME_NO      = GS_LIST-MALZEME_NO.
+      GS_SIPARIS-PARTI_NO        = GS_LIST-PARTI_NO.
+      GS_SIPARIS-MALZEME_SKT     = GS_LIST-MALZEME_SKT.
+      GS_SIPARIS-MALZEME_MIKTARI = O_MIKTAR.
+      APPEND GS_SIPARIS TO GT_SIPARIS.
+      I_MIKTAR = I_MIKTAR - O_MIKTAR.
+    ENDIF.
+
+    IF KALAN > 0.
+      GS_SIPARIS-MALZEME_NO      = GS_LIST-MALZEME_NO.
+      GS_SIPARIS-PARTI_NO        = GS_LIST-PARTI_NO.
+      GS_SIPARIS-MALZEME_SKT     = GS_LIST-MALZEME_SKT.
+      GS_SIPARIS-MALZEME_MIKTARI = I_MIKTAR.
+      APPEND GS_SIPARIS TO GT_SIPARIS.
+      EXIT.
+    ENDIF.
+
+  ENDLOOP.
+
+data: stok type i,
+      lv_str type string.
+
+
+   msg = 'Adet stok açığı var!' .
+   stok = i_miktar2 - toplam .
+   lv_str = stok.
+   CONCATENATE lv_str msg INTO RESULT.
+
+  IF TOPLAM < I_MIKTAR.
+    MESSAGE RESULT TYPE 'I'.
+  ENDIF.
+
+  PERFORM POPUP_DISPLAY.
+  CLEAR TOPLAM.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  POPUP_DISPLAY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM POPUP_DISPLAY .
+
+
+  CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
+    EXPORTING
+      I_TITLE     = 'Siparis Detayı'
+      I_SELECTION = SPACE
+      I_ZEBRA     = 'X'
+      I_TABNAME   = 'GT_SIPARIS'
+      IT_FIELDCAT = GT_FCAT
+    TABLES
+      T_OUTTAB    = GT_SIPARIS.
+
+  CLEAR GT_SIPARIS.
+  REFRESH GT_SIPARIS.
+  FREE GT_SIPARIS.
+ENDFORM.
